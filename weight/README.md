@@ -1,6 +1,6 @@
-# Model weights
+# Project model weights
 
-Model binaries are local runtime dependencies and are excluded from Git by the repository `.gitignore`. Obtain them separately and preserve this layout:
+Only the eight project-owned inference files belong in this directory and in the corresponding Zenodo record:
 
 ```text
 weight/
@@ -11,13 +11,14 @@ weight/
 ├── MIC_Enterococcus_faecium.joblib
 ├── MIC_Klebsiella_pneumoniae.joblib
 ├── MIC_Pseudomonas_aeruginosa.joblib
-├── MIC_Staphylococcus_aureus.joblib
-└── esmc-600m-2024-12/
-    ├── config.json
-    └── data/weights/esmc_600m_2024_12_v0.pth
+└── MIC_Staphylococcus_aureus.joblib
 ```
 
-The ESM C-600M checkpoint is an external pretrained model and must be obtained and used under its original distribution terms. If a `weights_manifest.sha256` file accompanies the repository, verify the local files from this directory with:
+The external ESM C-600M checkpoint is not distributed with this project or included in this checksum manifest. Users must obtain `esmc-600m-2024-12` / `esmc_600m_2024_12_v0` from the [official Hugging Face repository](https://huggingface.co/biohub/esmc-600m-2024-12). The scripts load the official model by default through `ESMC.from_pretrained("esmc_600m")` and its Hugging Face cache.
+
+For offline use, place the downloaded official repository at `external_models/esmc-600m-2024-12/`, so the checkpoint is available at `external_models/esmc-600m-2024-12/data/weights/esmc_600m_2024_12_v0.pth`, and pass `--esmc-weights external_models/esmc-600m-2024-12`.
+
+Verify the eight project files from this directory with:
 
 ```bash
 sha256sum -c weights_manifest.sha256

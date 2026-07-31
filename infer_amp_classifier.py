@@ -7,6 +7,7 @@ from pathlib import Path
 import pandas as pd
 
 from evoflow_core import (
+    ESMC_WEIGHTS_HELP,
     ESMCEncoder,
     load_amp_classifier,
     load_sequence_records,
@@ -25,7 +26,8 @@ def parse_args():
     parser.add_argument(
         "--esmc-weights",
         type=Path,
-        default=Path("weight/esmc-600m-2024-12"),
+        default=None,
+        help=ESMC_WEIGHTS_HELP,
     )
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--threshold", type=float, default=0.5)

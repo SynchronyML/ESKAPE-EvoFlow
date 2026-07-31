@@ -20,7 +20,8 @@ git-ESKAPE-EvoFlow/
 ├── requirements.txt
 ├── README.md
 ├── README.zh-CN.md
-└── weight/                     # 本地模型文件；默认被 Git 忽略
+├── weight/                     # 项目自有模型文件；默认被 Git 忽略
+└── external_models/            # 可选的离线 ESM C 模型；默认被 Git 忽略
 ```
 
 ### 1.2 运行环境
@@ -38,6 +39,7 @@ git-ESKAPE-EvoFlow/
 | scikit-learn | 1.8.0 |
 | joblib | 1.5.3 |
 | EvolutionaryScale `esm` | 3.2.1.post1 |
+| huggingface-hub | 0.33.0 |
 | 验证所用 GPU | NVIDIA GeForce RTX 3090 Ti，24 GB |
 | NVIDIA 驱动 / PyTorch CUDA 构建 | 591.86 / CUDA 12.6 |
 
@@ -86,13 +88,10 @@ weight/
 ├── MIC_Enterococcus_faecium.joblib
 ├── MIC_Klebsiella_pneumoniae.joblib
 ├── MIC_Pseudomonas_aeruginosa.joblib
-├── MIC_Staphylococcus_aureus.joblib
-└── esmc-600m-2024-12/
-    ├── config.json
-    └── data/weights/esmc_600m_2024_12_v0.pth
+└── MIC_Staphylococcus_aureus.joblib
 ```
 
-`.gitignore` 会排除所有模型二进制文件，克隆仓库后需要单独获取权重。`flow_generator.pt` 同时包含速度网络和 26-token 潜变量解码器。ESM C 检查点应遵循其原始分发条款。更多信息参见 [`weight/README.md`](weight/README.md)。
+这八个项目自有模型文件由 `.gitignore` 排除并单独分发。`flow_generator.pt` 同时包含速度网络和 26-token 潜变量解码器。更多信息参见 [`weight/README.md`](weight/README.md)。
 
 使用仓库提供的校验清单检查本地模型文件：
 
@@ -101,7 +100,24 @@ cd weight
 sha256sum -c weights_manifest.sha256
 ```
 
-可通过 `--weight-dir` 指定项目预测器目录，也可通过 `--esmc-weights` 直接指定 ESM C 模型目录或检查点文件。
+ESM C-600M 是外部依赖，不包含在本仓库、项目权重包、Zenodo 归档或校验清单中。用户需要自行从 [Hugging Face 官方仓库](https://huggingface.co/biohub/esmc-600m-2024-12)获取 `esmc-600m-2024-12` / `esmc_600m_2024_12_v0`。脚本默认调用 `ESMC.from_pretrained("esmc_600m")`，由 `esm==3.2.1.post1` 通过 Hugging Face 官方缓存自动下载或复用该模型。
+
+官方模型卡目前同时标注 `MIT` 和 `other`，其中 `other` 指向 [`Biohub/esm` 第三方声明](https://github.com/Biohub/esm/blob/main/THIRD_PARTY_NOTICE.md)；官方 ESM 源码仓库按 [MIT 许可证](https://github.com/Biohub/esm/blob/main/LICENSE.md)发布。使用前应以官方模型卡和第三方声明的最新内容为准。
+
+可通过 `--weight-dir` 指定八个项目预测器的目录。离线部署时，建议将官方 ESM C 仓库下载到固定位置 `external_models/esmc-600m-2024-12/`：
+
+```bash
+python -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='biohub/esmc-600m-2024-12', local_dir='external_models/esmc-600m-2024-12')"
+```
+
+脚本预期的权重路径为 `external_models/esmc-600m-2024-12/data/weights/esmc_600m_2024_12_v0.pth`。运行任何依赖 ESM C 的命令时，通过 `--esmc-weights` 指定该模型目录：
+
+```bash
+python infer_amp_classifier.py \
+  --input peptides.csv \
+  --esmc-weights external_models/esmc-600m-2024-12 \
+  --output results/amp_predictions.csv
+```
 
 ### 1.5 输入格式
 
@@ -124,7 +140,7 @@ peptide_2,KRWKFRQWWRMHWRRKCHKW
 
 ### 1.6 表征与可复现性
 
-分类、MIC 回归和自进化推理均使用 1,152 维 ESM C-600M 表征，并对全部 non-padding token 求平均。平均池化会保留 non-padding 的特殊 token。输入发布的预测器前不进行额外中心化、特征缩放或 L2 归一化。
+分类、MIC 回归和自进化推理使用官方 ESM C-600M tokenizer 及模型配置：36 个 Transformer 层、1,152 维隐藏表示和 18 个 attention heads。表征对全部 non-padding token 求平均，并保留 non-padding 的特殊 token。输入发布的预测器前不进行额外中心化、特征缩放或 L2 归一化。
 
 - `--seed` 控制生成流程中的 Python、NumPy 和 PyTorch 随机数，并为每条初始肽分配确定性的突变随机流。
 - CUDA 内核及依赖版本可能导致浮点结果存在细微差异。

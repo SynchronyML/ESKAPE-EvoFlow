@@ -13,6 +13,7 @@ import pandas as pd
 from evoflow_core import (
     AA_ALPHABET,
     BACTERIA,
+    ESMC_WEIGHTS_HELP,
     ESMCEncoder,
     load_amp_classifier,
     load_mic_models,
@@ -167,7 +168,8 @@ def parse_args():
     parser.add_argument(
         "--esmc-weights",
         type=Path,
-        default=Path("weight/esmc-600m-2024-12"),
+        default=None,
+        help=ESMC_WEIGHTS_HELP,
     )
     parser.add_argument("--iterations", type=int, default=1000)
     parser.add_argument("--patience", type=int, default=150)

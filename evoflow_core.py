@@ -18,6 +18,16 @@ SPECIAL_TOKENS = ["<pad>", "<bos>", "<eos>", "<unk>", "<mask>"]
 VOCAB = SPECIAL_TOKENS + list(AA_ALPHABET) + ["X"]
 CANONICAL_TOKEN_START = len(SPECIAL_TOKENS)
 CANONICAL_TOKEN_END = CANONICAL_TOKEN_START + len(AA_ALPHABET)
+ESMC_MODEL_NAME = "esmc_600m"
+ESMC_HIDDEN_SIZE = 1152
+ESMC_HF_REPO = "biohub/esmc-600m-2024-12"
+ESMC_HF_URL = "https://huggingface.co/{}".format(ESMC_HF_REPO)
+ESMC_OFFLINE_EXAMPLE = "external_models/esmc-600m-2024-12"
+ESMC_WEIGHTS_HELP = (
+    "Optional official ESM C model directory or checkpoint for offline use. "
+    "Download it from {} and place it, for example, at {}; when omitted, "
+    "ESMC.from_pretrained({!r}) uses the official Hugging Face cache."
+).format(ESMC_HF_URL, ESMC_OFFLINE_EXAMPLE, ESMC_MODEL_NAME)
 
 BACTERIA = [
     "Acinetobacter baumannii",
@@ -135,21 +145,53 @@ def _find_esmc_checkpoint(path: Path) -> Path:
     if path.is_file():
         return path
     if not path.exists():
-        raise FileNotFoundError("ESM C path does not exist: {}".format(path))
+        raise FileNotFoundError(
+            "ESM C path does not exist: {}. Download the official model from {} "
+            "and place it at {}, or pass the downloaded checkpoint directly.".format(
+                path, ESMC_HF_URL, ESMC_OFFLINE_EXAMPLE
+            )
+        )
     candidates = sorted(list(path.glob("**/*.pth")) + list(path.glob("**/*.pt")))
     if not candidates:
-        raise FileNotFoundError("No .pth or .pt checkpoint found under {}".format(path))
+        raise FileNotFoundError(
+            "No .pth or .pt checkpoint found under {}. The recommended layout is "
+            "{}/data/weights/esmc_600m_2024_12_v0.pth; obtain it from {}.".format(
+                path, ESMC_OFFLINE_EXAMPLE, ESMC_HF_URL
+            )
+        )
     return next((item for item in candidates if "esmc" in item.name.lower()), candidates[0])
 
 
-def load_esmc600m(path: Path, device: torch.device):
+def load_esmc600m(path: Optional[Path], device: torch.device):
     try:
         from esm.models.esmc import ESMC
         from esm.tokenization import EsmSequenceTokenizer
     except ImportError as exc:
         raise ImportError(
-            "The EvolutionaryScale esm package is required to load ESM C"
+            "The EvolutionaryScale esm package is required to load ESM C. "
+            "Install the pinned dependency from requirements.txt, then obtain the "
+            "official model from {}.".format(ESMC_HF_URL)
         ) from exc
+
+    if path is None:
+        try:
+            # Loading on CPU avoids the upstream CUDA bfloat16 cast and preserves
+            # the float32 representation used by the released predictors.
+            model = ESMC.from_pretrained(
+                ESMC_MODEL_NAME, device=torch.device("cpu")
+            )
+        except Exception as exc:
+            raise RuntimeError(
+                "Failed to load the official ESM C-600M model through "
+                "ESMC.from_pretrained({!r}). Download the official model from {} "
+                "or provide --esmc-weights {}, pointing to the downloaded model "
+                "directory or checkpoint.".format(
+                    ESMC_MODEL_NAME, ESMC_HF_URL, ESMC_OFFLINE_EXAMPLE
+                )
+            ) from exc
+        model = model.to(device=device, dtype=torch.float32)
+        model.eval()
+        return model
 
     checkpoint = _find_esmc_checkpoint(path)
     config = {
@@ -198,7 +240,7 @@ def load_esmc600m(path: Path, device: torch.device):
 class ESMCEncoder:
     """Project-compatible mean pooling over all non-padding ESM C tokens."""
 
-    def __init__(self, weights: Path, device: str = "auto"):
+    def __init__(self, weights: Optional[Path] = None, device: str = "auto"):
         self.device = resolve_device(device)
         self.model = load_esmc600m(weights, self.device)
         tokenizer = getattr(self.model, "tokenizer", None)
@@ -207,7 +249,7 @@ class ESMCEncoder:
     @torch.no_grad()
     def encode(self, sequences: Sequence[str], batch_size: int = 32) -> np.ndarray:
         if not sequences:
-            return np.empty((0, 1152), dtype=np.float32)
+            return np.empty((0, ESMC_HIDDEN_SIZE), dtype=np.float32)
         output: List[np.ndarray] = []
         for start in range(0, len(sequences), batch_size):
             batch = [clean_sequence(value) for value in sequences[start : start + batch_size]]
@@ -217,10 +259,10 @@ class ESMCEncoder:
             embeddings = result.embeddings if hasattr(result, "embeddings") else result[0]
             mask = attention_mask.unsqueeze(-1).to(embeddings.dtype)
             pooled = (embeddings * mask).sum(dim=1) / mask.sum(dim=1).clamp_min(1e-9)
-            if pooled.shape[-1] != 1152:
+            if pooled.shape[-1] != ESMC_HIDDEN_SIZE:
                 raise RuntimeError(
-                    "Expected 1152-dimensional ESM C embeddings, got {}".format(
-                        pooled.shape[-1]
+                    "Expected {}-dimensional ESM C embeddings, got {}".format(
+                        ESMC_HIDDEN_SIZE, pooled.shape[-1]
                     )
                 )
             values = pooled.float().cpu().numpy()

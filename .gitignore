@@ -7,6 +7,7 @@ results/
 *_predictions.csv
 generated_peptides.csv
 self_evolution_results/
+external_models/
 
 # Model binaries are distributed separately and must not be committed.
 weight/*

@@ -9,6 +9,7 @@ import pandas as pd
 
 from evoflow_core import (
     BACTERIA,
+    ESMC_WEIGHTS_HELP,
     ESMCEncoder,
     load_mic_models,
     load_sequence_records,
@@ -26,7 +27,8 @@ def parse_args():
     parser.add_argument(
         "--esmc-weights",
         type=Path,
-        default=Path("weight/esmc-600m-2024-12"),
+        default=None,
+        help=ESMC_WEIGHTS_HELP,
     )
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--device", choices=["auto", "cpu", "cuda"], default="auto")

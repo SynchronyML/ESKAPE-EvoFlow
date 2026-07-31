@@ -20,7 +20,8 @@ git-ESKAPE-EvoFlow/
 ├── requirements.txt
 ├── README.md
 ├── README.zh-CN.md
-└── weight/                     # Local model files; ignored by Git
+├── weight/                     # Project-owned model files; ignored by Git
+└── external_models/            # Optional offline ESM C model; ignored by Git
 ```
 
 ### 1.2 Runtime requirements
@@ -38,6 +39,7 @@ The public scripts were validated in the local `deepflavor` Mamba environment wi
 | scikit-learn | 1.8.0 |
 | joblib | 1.5.3 |
 | EvolutionaryScale `esm` | 3.2.1.post1 |
+| huggingface-hub | 0.33.0 |
 | GPU used for validation | NVIDIA GeForce RTX 3090 Ti, 24 GB |
 | NVIDIA driver / PyTorch CUDA build | 591.86 / CUDA 12.6 |
 
@@ -86,13 +88,10 @@ weight/
 ├── MIC_Enterococcus_faecium.joblib
 ├── MIC_Klebsiella_pneumoniae.joblib
 ├── MIC_Pseudomonas_aeruginosa.joblib
-├── MIC_Staphylococcus_aureus.joblib
-└── esmc-600m-2024-12/
-    ├── config.json
-    └── data/weights/esmc_600m_2024_12_v0.pth
+└── MIC_Staphylococcus_aureus.joblib
 ```
 
-Model binaries are intentionally excluded by `.gitignore` and must be obtained separately. `flow_generator.pt` contains the velocity network and the 26-token latent decoder. The ESM C checkpoint must be used under its original distribution terms. See [`weight/README.md`](weight/README.md) for details.
+These eight project-owned model files are intentionally excluded by `.gitignore` and distributed separately. `flow_generator.pt` contains the velocity network and the 26-token latent decoder. See [`weight/README.md`](weight/README.md) for details.
 
 Verify the local model files against the included checksum manifest:
 
@@ -101,7 +100,24 @@ cd weight
 sha256sum -c weights_manifest.sha256
 ```
 
-Use `--weight-dir` to relocate the project predictors and `--esmc-weights` to provide either the ESM C model directory or its checkpoint file directly.
+ESM C-600M is an external dependency and is not included in this repository, the project weight package, Zenodo archive, or checksum manifest. Users must obtain `esmc-600m-2024-12` / `esmc_600m_2024_12_v0` from the [official Hugging Face repository](https://huggingface.co/biohub/esmc-600m-2024-12). By default, the scripts call `ESMC.from_pretrained("esmc_600m")`, allowing `esm==3.2.1.post1` to download or reuse the model through the official Hugging Face cache.
+
+The official model card currently declares `MIT` and `other`, with `other` referring to the [`Biohub/esm` third-party notice](https://github.com/Biohub/esm/blob/main/THIRD_PARTY_NOTICE.md); the official ESM source repository provides its code under the [MIT license](https://github.com/Biohub/esm/blob/main/LICENSE.md). Users must review the current upstream model card and notices before use.
+
+Use `--weight-dir` to relocate the eight project predictors. For a reproducible offline layout, download the official ESM C repository into `external_models/esmc-600m-2024-12/`:
+
+```bash
+python -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='biohub/esmc-600m-2024-12', local_dir='external_models/esmc-600m-2024-12')"
+```
+
+The expected checkpoint path is `external_models/esmc-600m-2024-12/data/weights/esmc_600m_2024_12_v0.pth`. Pass that model directory to any ESM C-dependent command with `--esmc-weights`:
+
+```bash
+python infer_amp_classifier.py \
+  --input peptides.csv \
+  --esmc-weights external_models/esmc-600m-2024-12 \
+  --output results/amp_predictions.csv
+```
 
 ### 1.5 Input formats
 
@@ -124,7 +140,7 @@ peptide_2,KRWKFRQWWRMHWRRKCHKW
 
 ### 1.6 Representation and reproducibility
 
-Classifier, MIC, and self-evolution inference use 1,152-dimensional ESM C-600M representations averaged over all non-padding tokens. Non-padding special tokens remain in the mean. No centering, feature scaling, or L2 normalization is applied before the released predictors.
+Classifier, MIC, and self-evolution inference use the official ESM C-600M tokenizer and model configuration: 36 transformer layers, hidden size 1,152, and 18 attention heads. Representations are averaged over all non-padding tokens; non-padding special tokens remain in the mean. No centering, feature scaling, or L2 normalization is applied before the released predictors.
 
 - `--seed` controls Python, NumPy, and PyTorch sampling in generation and deterministic per-seed mutation streams in self-evolution.
 - CUDA kernels and dependency versions may affect exact floating-point output.
