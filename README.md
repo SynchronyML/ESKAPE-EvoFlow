@@ -2,6 +2,8 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+
 ESKAPE-EvoFlow is an inference-only toolkit for antimicrobial peptide (AMP) classification, six-species MIC regression, rectified-flow peptide generation, and reward-guided peptide self-evolution. Training scripts, training datasets, and experimental result tables are not included.
 
 > **Scope:** All outputs are computational predictions for sequence prioritization. They are not substitutes for experimental AMP or MIC measurements.
@@ -18,6 +20,8 @@ git-ESKAPE-EvoFlow/
 ├── generate_peptides.py        # Rectified-flow generation and ranking
 ├── self_evolution.py           # Local-mutation peptide self-evolution
 ├── requirements.txt
+├── LICENSE
+├── THIRD_PARTY_NOTICES.md
 ├── README.md
 ├── README.zh-CN.md
 ├── weight/                     # Project-owned model files; ignored by Git
@@ -146,6 +150,12 @@ Classifier, MIC, and self-evolution inference use the official ESM C-600M tokeni
 - CUDA kernels and dependency versions may affect exact floating-point output.
 - Checkpoints are loaded strictly; missing or structurally incompatible model states cause immediate failure.
 - Run any command with `--help` for its complete parameter list.
+
+### 1.7 License
+
+The ESKAPE-EvoFlow source code and the eight project-owned model weights are released under the [Apache License 2.0](LICENSE). When depositing the project-owned weights on Zenodo, select `Apache-2.0` in the record metadata and include a copy of `LICENSE` in the downloadable archive.
+
+This project license does not cover ESM C or other third-party dependencies. ESM C is obtained separately from Biohub and remains subject to its upstream model card, MIT license, and third-party notices. See [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) for the dependency boundary and source links.
 
 ## 2. Functions
 

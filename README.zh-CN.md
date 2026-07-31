@@ -2,6 +2,8 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
+[![许可证](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+
 ESKAPE-EvoFlow 是用于抗菌肽（AMP）分类、六种 ESKAPE 细菌 MIC 回归、rectified-flow 肽序列生成以及奖励引导肽序列自进化的推理工具。本仓库不包含训练脚本、训练数据集和实验结果表。
 
 > **适用范围：** 本仓库输出均为用于序列优先级排序的计算预测，不能替代 AMP 活性或 MIC 的实验测量。
@@ -18,6 +20,8 @@ git-ESKAPE-EvoFlow/
 ├── generate_peptides.py        # Rectified-flow 生成与候选排序
 ├── self_evolution.py           # 基于局部突变的肽序列自进化
 ├── requirements.txt
+├── LICENSE
+├── THIRD_PARTY_NOTICES.md
 ├── README.md
 ├── README.zh-CN.md
 ├── weight/                     # 项目自有模型文件；默认被 Git 忽略
@@ -146,6 +150,12 @@ peptide_2,KRWKFRQWWRMHWRRKCHKW
 - CUDA 内核及依赖版本可能导致浮点结果存在细微差异。
 - 权重采用严格加载；文件缺失或模型结构不兼容时立即失败。
 - 所有命令均可添加 `--help` 查看完整参数列表。
+
+### 1.7 许可证
+
+ESKAPE-EvoFlow 源代码及八个项目自有模型权重均按 [Apache License 2.0](LICENSE) 发布。将项目自有权重上传至 Zenodo 时，应在记录元数据中选择 `Apache-2.0`，并在可下载的权重归档中包含一份 `LICENSE`。
+
+本项目许可证不覆盖 ESM C 或其他第三方依赖。ESM C 由用户从 Biohub 单独获取，并继续受其上游模型卡、MIT 许可证和第三方声明约束。依赖边界和官方来源链接参见 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)。
 
 ## 2. 功能说明
 
