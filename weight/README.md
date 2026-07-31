@@ -16,6 +16,8 @@ weight/
 
 These eight project-owned files are released under the repository [Apache License 2.0](../LICENSE). A standalone Zenodo weight archive must include a copy of `LICENSE`, and the Zenodo record license should be set to `Apache-2.0`.
 
+The published project-weight archive is available from [Zenodo (DOI: 10.5281/zenodo.21723051)](https://doi.org/10.5281/zenodo.21723051).
+
 The external ESM C-600M checkpoint is not distributed with this project or included in this checksum manifest. Users must obtain `esmc-600m-2024-12` / `esmc_600m_2024_12_v0` from the [official Hugging Face repository](https://huggingface.co/biohub/esmc-600m-2024-12). The scripts load the official model by default through `ESMC.from_pretrained("esmc_600m")` and its Hugging Face cache.
 
 For offline use, place the downloaded official repository at `external_models/esmc-600m-2024-12/`, so the checkpoint is available at `external_models/esmc-600m-2024-12/data/weights/esmc_600m_2024_12_v0.pth`, and pass `--esmc-weights external_models/esmc-600m-2024-12`.

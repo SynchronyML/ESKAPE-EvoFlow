@@ -3,6 +3,7 @@
 [English](README.md) | [简体中文](README.zh-CN.md)
 
 [![许可证](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21723051.svg)](https://doi.org/10.5281/zenodo.21723051)
 
 ESKAPE-EvoFlow 是用于抗菌肽（AMP）分类、六种 ESKAPE 细菌 MIC 回归、rectified-flow 肽序列生成以及奖励引导肽序列自进化的推理工具。本仓库不包含训练脚本、训练数据集和实验结果表。
 
@@ -21,7 +22,6 @@ git-ESKAPE-EvoFlow/
 ├── self_evolution.py           # 基于局部突变的肽序列自进化
 ├── requirements.txt
 ├── LICENSE
-├── THIRD_PARTY_NOTICES.md
 ├── README.md
 ├── README.zh-CN.md
 ├── weight/                     # 项目自有模型文件；默认被 Git 忽略
@@ -95,7 +95,7 @@ weight/
 └── MIC_Staphylococcus_aureus.joblib
 ```
 
-这八个项目自有模型文件由 `.gitignore` 排除并单独分发。`flow_generator.pt` 同时包含速度网络和 26-token 潜变量解码器。更多信息参见 [`weight/README.md`](weight/README.md)。
+这八个项目自有模型文件由 `.gitignore` 排除，并通过 [Zenodo（DOI：10.5281/zenodo.21723051）](https://doi.org/10.5281/zenodo.21723051)单独分发。`flow_generator.pt` 同时包含速度网络和 26-token 潜变量解码器。更多信息参见 [`weight/README.md`](weight/README.md)。
 
 使用仓库提供的校验清单检查本地模型文件：
 
@@ -155,7 +155,7 @@ peptide_2,KRWKFRQWWRMHWRRKCHKW
 
 ESKAPE-EvoFlow 源代码及八个项目自有模型权重均按 [Apache License 2.0](LICENSE) 发布。将项目自有权重上传至 Zenodo 时，应在记录元数据中选择 `Apache-2.0`，并在可下载的权重归档中包含一份 `LICENSE`。
 
-本项目许可证不覆盖 ESM C 或其他第三方依赖。ESM C 由用户从 Biohub 单独获取，并继续受其上游模型卡、MIT 许可证和第三方声明约束。依赖边界和官方来源链接参见 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)。
+本项目许可证不覆盖 ESM C 或其他第三方依赖，且本项目不再分发 ESM C。用户应从 [Biohub 官方模型仓库](https://huggingface.co/biohub/esmc-600m-2024-12)单独获取；其软件、模型及依赖继续受上游 [MIT 许可证](https://github.com/Biohub/esm/blob/main/LICENSE.md)、模型卡和[第三方声明](https://github.com/Biohub/esm/blob/main/THIRD_PARTY_NOTICE.md)约束。`requirements.txt` 中的运行时依赖继续遵循各自的上游许可证。
 
 ## 2. 功能说明
 
@@ -267,6 +267,8 @@ reward = 0.4 * AMP_probability
 ### 3.1 引用
 
 相关研究发表后将在此补充引用信息。
+
+项目自有模型权重：Cui, Zhiyong. (2026). *ESKAPE-EvoFlow*. Zenodo. [https://doi.org/10.5281/zenodo.21723051](https://doi.org/10.5281/zenodo.21723051)。
 
 ### 3.2 联系方式
 

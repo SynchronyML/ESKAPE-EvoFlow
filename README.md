@@ -3,6 +3,7 @@
 [English](README.md) | [简体中文](README.zh-CN.md)
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21723051.svg)](https://doi.org/10.5281/zenodo.21723051)
 
 ESKAPE-EvoFlow is an inference-only toolkit for antimicrobial peptide (AMP) classification, six-species MIC regression, rectified-flow peptide generation, and reward-guided peptide self-evolution. Training scripts, training datasets, and experimental result tables are not included.
 
@@ -21,7 +22,6 @@ git-ESKAPE-EvoFlow/
 ├── self_evolution.py           # Local-mutation peptide self-evolution
 ├── requirements.txt
 ├── LICENSE
-├── THIRD_PARTY_NOTICES.md
 ├── README.md
 ├── README.zh-CN.md
 ├── weight/                     # Project-owned model files; ignored by Git
@@ -95,7 +95,7 @@ weight/
 └── MIC_Staphylococcus_aureus.joblib
 ```
 
-These eight project-owned model files are intentionally excluded by `.gitignore` and distributed separately. `flow_generator.pt` contains the velocity network and the 26-token latent decoder. See [`weight/README.md`](weight/README.md) for details.
+These eight project-owned model files are intentionally excluded by `.gitignore` and distributed separately through [Zenodo (DOI: 10.5281/zenodo.21723051)](https://doi.org/10.5281/zenodo.21723051). `flow_generator.pt` contains the velocity network and the 26-token latent decoder. See [`weight/README.md`](weight/README.md) for details.
 
 Verify the local model files against the included checksum manifest:
 
@@ -155,7 +155,7 @@ Classifier, MIC, and self-evolution inference use the official ESM C-600M tokeni
 
 The ESKAPE-EvoFlow source code and the eight project-owned model weights are released under the [Apache License 2.0](LICENSE). When depositing the project-owned weights on Zenodo, select `Apache-2.0` in the record metadata and include a copy of `LICENSE` in the downloadable archive.
 
-This project license does not cover ESM C or other third-party dependencies. ESM C is obtained separately from Biohub and remains subject to its upstream model card, MIT license, and third-party notices. See [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) for the dependency boundary and source links.
+This project license does not cover ESM C or other third-party dependencies. ESM C is not redistributed by this project: users obtain it separately from the [official Biohub model repository](https://huggingface.co/biohub/esmc-600m-2024-12), and its software, model, and dependencies remain subject to the upstream [MIT license](https://github.com/Biohub/esm/blob/main/LICENSE.md), model card, and [third-party notices](https://github.com/Biohub/esm/blob/main/THIRD_PARTY_NOTICE.md). Runtime packages listed in `requirements.txt` retain their respective upstream licenses.
 
 ## 2. Functions
 
@@ -267,6 +267,8 @@ The command writes one `<seed>_history.csv` per seed and a combined `self_evolut
 ### 3.1 Citation
 
 Citation information will be added when the associated study is published.
+
+Project-owned model weights: Cui, Zhiyong. (2026). *ESKAPE-EvoFlow*. Zenodo. [https://doi.org/10.5281/zenodo.21723051](https://doi.org/10.5281/zenodo.21723051).
 
 ### 3.2 Contact
 
