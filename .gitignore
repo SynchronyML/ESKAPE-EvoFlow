@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+.venv/
+.idea/
+.vscode/
+results/
+*_predictions.csv
+generated_peptides.csv
+self_evolution_results/
+
+# Model binaries are distributed separately and must not be committed.
+weight/*
+!weight/README.md
+!weight/weights_manifest.sha256
