@@ -1,0 +1,49 @@
+contract_version: ESKAPE-EvoFlow-UCT-MCTS-MANUSCRIPT-EXACT-2026-08-29
+
+models:
+  weight_dir: weight
+  esmc_weights: external_models/esmc-600m-2024-12
+  amp_checkpoint: amp_classifier.pt
+  amp_inference_activation: SiLU
+  amp_inference_dropout: 0.2
+  mic_models_are_species_specific: true
+
+scoring:
+  amp_weight: 0.4
+  mic_weight: 0.6
+  mic_activity_transform: exp(-log10_mic)
+  amp_inference_activation: SiLU
+  batch_size: 32
+
+algorithm:
+  branching_factor: 8
+  exploration_coefficient: 25.0
+  uct_epsilon: 0.000001
+  fingerprint_radius: 3
+  fingerprint_bits: 1024
+  max_candidates: 150
+  candidates_per_residue: 5
+  max_expansions: 1000
+  patience: 150
+
+proposals:
+  one_mutation_probability: 0.8
+  two_mutation_probability: 0.2
+  pure_local_probability: 1.0
+  mixed_local_probability: 0.5
+  mixed_global_same_length_probability: 0.5
+  canonical_amino_acids: ACDEFGHIKLMNPQRSTVWY
+  preserve_length: true
+
+checkpointing:
+  interval_expansions: 20
+  atomic_write: true
+
+reproducibility:
+  base_seed: 42
+  deterministic_tree_seed: sha256(base_seed,parent_id,strategy)
+  torch_deterministic_algorithms: true
+
+outputs:
+  output_dir: outputs/uct_mcts
+  cache_dir: outputs/uct_mcts/cache

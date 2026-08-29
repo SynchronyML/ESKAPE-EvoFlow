@@ -19,7 +19,15 @@ git-ESKAPE-EvoFlow/
 ├── infer_amp_classifier.py     # AMP classifier inference
 ├── infer_mic_regressors.py     # Six-species MIC inference
 ├── generate_peptides.py        # Rectified-flow generation and ranking
-├── self_evolution.py           # Local-mutation peptide self-evolution
+├── self_evolution.py           # Legacy lightweight local-mutation search
+├── mcts/                       # Auditable UCT policy, scoring, cache, and tree state
+├── scripts/
+│   ├── run_uct_mcts.py         # Formal manuscript-exact PureMCTS/MixedMCTS entrypoint
+│   └── audit_manuscript_mcts.py # Regenerate/check the consistency audit
+├── configs/uct_mcts_manuscript.yaml
+├── tests/                      # MCTS formula, constraint, resume, and determinism tests
+├── MCTS_IMPLEMENTATION_AUDIT.md
+├── MANUSCRIPT_MCTS_CONSISTENCY_AUDIT.md
 ├── requirements.txt
 ├── LICENSE
 ├── README.md
@@ -44,6 +52,9 @@ The public scripts were validated in the local `deepflavor` Mamba environment wi
 | joblib | 1.5.3 |
 | EvolutionaryScale `esm` | 3.2.1.post1 |
 | huggingface-hub | 0.33.0 |
+| RDKit | 2025.03.2 |
+| PyYAML | 6.0.2 |
+| tqdm | 4.67.1 |
 | GPU used for validation | NVIDIA GeForce RTX 3090 Ti, 24 GB |
 | NVIDIA driver / PyTorch CUDA build | 591.86 / CUDA 12.6 |
 
@@ -146,7 +157,7 @@ peptide_2,KRWKFRQWWRMHWRRKCHKW
 
 Classifier, MIC, and self-evolution inference use the official ESM C-600M tokenizer and model configuration: 36 transformer layers, hidden size 1,152, and 18 attention heads. Representations are averaged over all non-padding tokens; non-padding special tokens remain in the mean. No centering, feature scaling, or L2 normalization is applied before the released predictors.
 
-- `--seed` controls Python, NumPy, and PyTorch sampling in generation and deterministic per-seed mutation streams in self-evolution.
+- `--seed` controls Python, NumPy, and PyTorch sampling. UCT-MCTS derives an independent stable seed from SHA256(base seed, parent ID, strategy) for every tree.
 - CUDA kernels and dependency versions may affect exact floating-point output.
 - Checkpoints are loaded strictly; missing or structurally incompatible model states cause immediate failure.
 - Run any command with `--help` for its complete parameter list.
@@ -232,35 +243,75 @@ The initial ranking uses the mean-pooled terminal flow latent. Decoded peptides 
 
 ### 2.4 Peptide self-evolution
 
-Optimize each seed peptide in an independent UCB-style search tree:
+The manuscript-exact implementation builds one independent UCT tree for each flow-generated parent and supports `PureMCTS` and `MixedMCTS`:
+
+**Formal manuscript reproduction entrypoint:** `scripts/run_uct_mcts.py`. Run it from the repository root so the frozen config, `mcts` package and shared `evoflow_core.py` are resolved from this checkout. The older root-level `self_evolution.py` is not the manuscript reproduction entrypoint.
 
 ```bash
-python self_evolution.py \
-  --input seed_peptides.csv \
-  --output-dir results/self_evolution \
-  --iterations 1000 \
-  --patience 150 \
-  --batch-size 32 \
+python scripts/run_uct_mcts.py \
+  --parents flow_generated_parents.csv \
+  --strategies PureMCTS MixedMCTS \
+  --devices cuda:0 \
   --seed 42 \
-  --device cuda
+  --output-dir outputs/uct_mcts \
+  --cache-dir outputs/uct_mcts/cache
 ```
 
-For a parent sequence of length `L`, each mutation changes a uniformly sampled number of positions in:
+For multiple GPUs, list each device once; one persistent worker and one resident model set are created per device:
+
+```bash
+python scripts/run_uct_mcts.py \
+  --parents flow_generated_parents.csv \
+  --devices cuda:0 cuda:1 cuda:2 cuda:3 \
+  --seed 42
+```
+
+The frozen defaults are in `configs/uct_mcts_manuscript.yaml`: branching factor 8, exploration coefficient 25, epsilon `1e-6`, exactly `min(150, 5L)` ordered proposal attempts per expansion, 1,000 expansions, and patience 150. Duplicates do not trigger refill attempts. PureMCTS uses 100% local proposals with one/two substitutions at probabilities 0.8/0.2. MixedMCTS dispatches each proposal event 50:50 between that local kernel and an independently sampled, canonical, same-length global peptide. Pure and Mixed otherwise use identical selection, scoring, insertion, backpropagation and stopping rules.
+
+When a node already has eight children, traversal uses:
 
 ```text
-1, ..., max(1, floor(L / 5))
+UCT(a|s) = Q(a)/(N(a)+1e-6)
+           + 25 * U(a; T excluding a)
+             * sqrt(log(N(s)+1)/(N(a)+1e-6))
 ```
 
-Positions are sampled without replacement, and each selected residue is replaced uniformly by one of the other 19 canonical amino acids. Length is preserved. The script performs no insertion, deletion, crossover, or fully random same-length sequence jump.
+`U` is one minus the maximum Tanimoto similarity between the child's non-chiral binary radius-3, 1,024-bit Morgan fingerprint and all other nodes in the same tree. Excluding the child itself prevents the exploration term from collapsing to zero. See `MCTS_IMPLEMENTATION_AUDIT.md` for the source comparison and `MANUSCRIPT_MCTS_CONSISTENCY_AUDIT.md` for the automatically verified final checklist.
 
-Each candidate is re-encoded by frozen ESM C and scored as:
+Every eligible candidate is re-encoded by frozen ESM C and scored in a batch with the SiLU AMP inference implementation and six independent MIC regressors:
 
 ```text
 reward = 0.4 * AMP_probability
        + 0.6 * mean(exp(-predicted_log10_MIC_j), j=1..6)
 ```
 
-The command writes one `<seed>_history.csv` per seed and a combined `self_evolution_summary.csv`.
+Only one highest-immediate-reward candidate is inserted per expansion; exact ties select the first maximum in proposal-generation order. No independent stochastic rollout is performed. The new reward is back-propagated from child through root. Early stopping uses the literal comparison `R_new > R_best` with no tolerance. Sequence scores are cached independently from tree statistics. Each parent/strategy directory contains `nodes.csv`, `edges.csv`, `candidate_evaluations.csv`, `selection_log.csv`, `trajectory.csv`, `lineage.csv`, `final_result.csv`, `summary.json`, and an atomic resume checkpoint. Use `--resume --reuse-score-cache` after interruption.
+
+Run the model-free contract tests with:
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+Regenerate and verify the formal consistency checklist with:
+
+```bash
+python scripts/audit_manuscript_mcts.py
+python scripts/audit_manuscript_mcts.py --check
+```
+
+Run the two-parent, 20-expansion-per-tree model smoke test before a full search:
+
+```bash
+python scripts/run_uct_mcts.py \
+  --sequence KSYKFECRWRFHLTTNCIKT GRPPRHRIPPPRRVRVHPRF \
+  --devices cuda:0 \
+  --output-dir results/runtime_smoke_test/uct_mcts \
+  --cache-dir results/runtime_smoke_test/uct_mcts/cache \
+  --smoke-test
+```
+
+The implementation status recorded by the automated audit is `MANUSCRIPT_EXACT_UCT_MCTS_READY`.
 
 ## 3. Citation and contact
 

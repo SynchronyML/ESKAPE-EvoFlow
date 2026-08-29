@@ -19,7 +19,15 @@ git-ESKAPE-EvoFlow/
 ├── infer_amp_classifier.py     # AMP 分类器推理
 ├── infer_mic_regressors.py     # 六菌 MIC 回归推理
 ├── generate_peptides.py        # Rectified-flow 生成与候选排序
-├── self_evolution.py           # 基于局部突变的肽序列自进化
+├── self_evolution.py           # 旧版轻量局部突变搜索
+├── mcts/                       # 可审计 UCT、评分、缓存与树状态模块
+├── scripts/
+│   ├── run_uct_mcts.py         # 正式稿件精确 PureMCTS/MixedMCTS 入口
+│   └── audit_manuscript_mcts.py # 重新生成/核验一致性审计
+├── configs/uct_mcts_manuscript.yaml
+├── tests/                      # MCTS 公式、约束、续跑与确定性测试
+├── MCTS_IMPLEMENTATION_AUDIT.md
+├── MANUSCRIPT_MCTS_CONSISTENCY_AUDIT.md
 ├── requirements.txt
 ├── LICENSE
 ├── README.md
@@ -44,6 +52,9 @@ git-ESKAPE-EvoFlow/
 | joblib | 1.5.3 |
 | EvolutionaryScale `esm` | 3.2.1.post1 |
 | huggingface-hub | 0.33.0 |
+| RDKit | 2025.03.2 |
+| PyYAML | 6.0.2 |
+| tqdm | 4.67.1 |
 | 验证所用 GPU | NVIDIA GeForce RTX 3090 Ti，24 GB |
 | NVIDIA 驱动 / PyTorch CUDA 构建 | 591.86 / CUDA 12.6 |
 
@@ -146,7 +157,7 @@ peptide_2,KRWKFRQWWRMHWRRKCHKW
 
 分类、MIC 回归和自进化推理使用官方 ESM C-600M tokenizer 及模型配置：36 个 Transformer 层、1,152 维隐藏表示和 18 个 attention heads。表征对全部 non-padding token 求平均，并保留 non-padding 的特殊 token。输入发布的预测器前不进行额外中心化、特征缩放或 L2 归一化。
 
-- `--seed` 控制生成流程中的 Python、NumPy 和 PyTorch 随机数，并为每条初始肽分配确定性的突变随机流。
+- `--seed` 控制 Python、NumPy 和 PyTorch 随机数。UCT-MCTS 使用 SHA256（基础种子、parent ID、strategy）为每棵树派生独立且稳定的种子。
 - CUDA 内核及依赖版本可能导致浮点结果存在细微差异。
 - 权重采用严格加载；文件缺失或模型结构不兼容时立即失败。
 - 所有命令均可添加 `--help` 查看完整参数列表。
@@ -232,35 +243,75 @@ screening_score = 10 * AMP_probability
 
 ### 2.4 肽序列自进化
 
-在独立的 UCB 风格搜索树中优化每条初始肽：
+稿件精确实现为每条 flow-generated parent 建立独立 UCT 树，同时支持 `PureMCTS` 和 `MixedMCTS`：
+
+**正式稿件复现入口：** `scripts/run_uct_mcts.py`。请从仓库根目录运行，使冻结配置、`mcts` 包和公共 `evoflow_core.py` 均从当前 checkout 正确加载。仓库根目录中的旧版 `self_evolution.py` 不是正式稿件复现入口。
 
 ```bash
-python self_evolution.py \
-  --input seed_peptides.csv \
-  --output-dir results/self_evolution \
-  --iterations 1000 \
-  --patience 150 \
-  --batch-size 32 \
+python scripts/run_uct_mcts.py \
+  --parents flow_generated_parents.csv \
+  --strategies PureMCTS MixedMCTS \
+  --devices cuda:0 \
   --seed 42 \
-  --device cuda
+  --output-dir outputs/uct_mcts \
+  --cache-dir outputs/uct_mcts/cache
 ```
 
-对于长度为 `L` 的父序列，每次突变从以下整数范围均匀抽取突变位点数：
+多 GPU 运行时，每张卡只列一次；每个 device 建立一个常驻模型 worker：
+
+```bash
+python scripts/run_uct_mcts.py \
+  --parents flow_generated_parents.csv \
+  --devices cuda:0 cuda:1 cuda:2 cuda:3 \
+  --seed 42
+```
+
+`configs/uct_mcts_manuscript.yaml` 固化了正式参数：branching factor 8、探索系数 25、epsilon `1e-6`、每次扩展严格执行 `min(150, 5L)` 次有序 proposal attempt、最多扩展 1,000 次、patience 150。duplicate 不会触发补采样。PureMCTS 以 0.8/0.2 概率执行一位/两位局部替换。MixedMCTS 对每个 proposal event 以 50:50 分派至相同 local kernel 或独立采样的 canonical 同长度全局肽。除 proposal strategy 外，两者的 selection、scoring、insertion、backpropagation 和 stopping 完全一致。
+
+当节点已有八个子节点时，使用以下公式继续遍历：
 
 ```text
-1, ..., max(1, floor(L / 5))
+UCT(a|s) = Q(a)/(N(a)+1e-6)
+           + 25 * U(a; T 中排除 a)
+             * sqrt(log(N(s)+1)/(N(a)+1e-6))
 ```
 
-突变位置无放回抽样，每个位点均匀替换为其余 19 种标准氨基酸之一。序列长度保持不变。脚本不执行插入、缺失、交叉，也不生成完全随机的同长度序列。
+`U` 等于 1 减去该 child 的无手性二进制 radius-3、1,024-bit Morgan 指纹与同一棵树中其他节点的最大 Tanimoto 相似度。排除 child 自身可避免 exploration 恒为零。来源对照见 `MCTS_IMPLEMENTATION_AUDIT.md`，自动验证后的最终清单见 `MANUSCRIPT_MCTS_CONSISTENCY_AUDIT.md`。
 
-每条候选序列都会由冻结的 ESM C 重新编码，并按以下公式评分：
+每条合格候选都由冻结的 ESM C 重新编码，并由 SiLU AMP inference implementation 与六个独立 MIC 回归器进行批量评分：
 
 ```text
 reward = 0.4 * AMP_probability
        + 0.6 * mean(exp(-predicted_log10_MIC_j), j=1..6)
 ```
 
-命令为每条初始肽输出一个 `<seed>_history.csv`，并生成汇总文件 `self_evolution_summary.csv`。
+每次扩展仅插入一条 immediate reward 最高的 candidate；完全并列时按 proposal 生成顺序选择第一个 maximum。不执行独立 stochastic rollout。新节点奖励从 child 完整回传到 root。early stopping 使用不带 tolerance 的严格 `R_new > R_best`。序列评分缓存与树统计严格分离。每个 parent/strategy 目录输出 `nodes.csv`、`edges.csv`、`candidate_evaluations.csv`、`selection_log.csv`、`trajectory.csv`、`lineage.csv`、`final_result.csv`、`summary.json` 及原子续跑 checkpoint。中断后使用 `--resume --reuse-score-cache`。
+
+无需加载大模型的合同单元测试命令：
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+重新生成并核验正式一致性清单：
+
+```bash
+python scripts/audit_manuscript_mcts.py
+python scripts/audit_manuscript_mcts.py --check
+```
+
+正式全量运行前执行两条 parent、每棵树 20 次扩展的真实模型 smoke test：
+
+```bash
+python scripts/run_uct_mcts.py \
+  --sequence KSYKFECRWRFHLTTNCIKT GRPPRHRIPPPRRVRVHPRF \
+  --devices cuda:0 \
+  --output-dir results/runtime_smoke_test/uct_mcts \
+  --cache-dir results/runtime_smoke_test/uct_mcts/cache \
+  --smoke-test
+```
+
+自动审计记录的当前实现状态为 `MANUSCRIPT_EXACT_UCT_MCTS_READY`。
 
 ## 3. 引用和联系方式
 
